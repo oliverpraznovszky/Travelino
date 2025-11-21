@@ -6,6 +6,8 @@ let currentUser = null;
 let currentTrip = null;
 let map = null;
 let markers = [];
+let poiMarkers = [];
+let routingControl = null;
 let addingWaypoint = false;
 
 // Initialize
@@ -45,6 +47,7 @@ function checkAuth() {
         };
         showUserInfo();
         loadTrips();
+        checkInvitations(); // Check for pending invitations
     } else {
         showAuthButtons();
     }
@@ -67,9 +70,11 @@ function setupEventListeners() {
     document.getElementById('registerForm').addEventListener('submit', handleRegister);
     document.getElementById('createTripForm').addEventListener('submit', handleCreateTrip);
     document.getElementById('addWaypointForm').addEventListener('submit', handleAddWaypoint);
+    document.getElementById('inviteForm').addEventListener('submit', handleInvite);
 }
 
-// Authentication handlers
+// ========== Authentication handlers ==========
+
 async function handleLogin(e) {
     e.preventDefault();
 
@@ -98,6 +103,7 @@ async function handleLogin(e) {
             bootstrap.Modal.getInstance(document.getElementById('loginModal')).hide();
             showUserInfo();
             loadTrips();
+            checkInvitations();
             showSuccess('Sikeres bejelentkezés!');
         } else {
             const error = await response.json();
@@ -139,6 +145,7 @@ async function handleRegister(e) {
             bootstrap.Modal.getInstance(document.getElementById('registerModal')).hide();
             showUserInfo();
             loadTrips();
+            checkInvitations();
             showSuccess('Sikeres regisztráció!');
         } else {
             const error = await response.json();
@@ -157,12 +164,15 @@ function logout() {
     currentTrip = null;
     showAuthButtons();
     clearMap();
+    clearPOIs();
     document.getElementById('tripsList').innerHTML = '<p class="text-muted">Nincs megjeleníthető utazás</p>';
     document.getElementById('tripDetailsCard').style.display = 'none';
     document.getElementById('waypointsCard').style.display = 'none';
+    document.getElementById('poiSearchPanel').style.display = 'none';
 }
 
-// Trip handlers
+// ========== Trip handlers ==========
+
 async function loadTrips() {
     if (!currentUser) return;
 
@@ -254,14 +264,16 @@ async function selectTrip(tripId) {
             currentTrip = await response.json();
             displayTripDetails(currentTrip);
             displayWaypoints(currentTrip.waypoints);
+            updateRouting(currentTrip.waypoints);
             document.getElementById('exportPdfBtn').disabled = false;
             document.getElementById('compareTripBtn').disabled = false;
+            document.getElementById('inviteBtn').disabled = false;
 
             // Highlight selected trip
             document.querySelectorAll('#tripsList .list-group-item').forEach(item => {
                 item.classList.remove('active');
             });
-            event.target.closest('.list-group-item').classList.add('active');
+            event.target.closest('.list-group-item')?.classList.add('active');
         } else {
             showError('Nem sikerült betölteni az utazást');
         }
@@ -291,6 +303,8 @@ function displayTripDetails(trip) {
 
     detailsCard.style.display = 'block';
 }
+
+// ========== Waypoint handlers ==========
 
 function displayWaypoints(waypoints) {
     clearMap();
@@ -344,9 +358,14 @@ function displayWaypoints(waypoints) {
 function clearMap() {
     markers.forEach(marker => map.removeLayer(marker));
     markers = [];
+
+    // Clear routing
+    if (routingControl) {
+        map.removeControl(routingControl);
+        routingControl = null;
+    }
 }
 
-// Waypoint handlers
 function addWaypointMode() {
     if (!currentTrip) {
         showError('Először válassz ki egy utazást!');
@@ -402,7 +421,391 @@ async function handleAddWaypoint(e) {
     }
 }
 
-// Export to PDF
+// ========== Routing ==========
+
+function updateRouting(waypoints) {
+    // Clear existing routing
+    if (routingControl) {
+        map.removeControl(routingControl);
+        routingControl = null;
+    }
+
+    // Need at least 2 waypoints for routing
+    if (waypoints.length < 2) {
+        return;
+    }
+
+    // Create waypoints for routing (max 25 waypoints for OSRM)
+    const routeWaypoints = waypoints
+        .slice(0, 25)
+        .map(wp => L.latLng(wp.latitude, wp.longitude));
+
+    routingControl = L.Routing.control({
+        waypoints: routeWaypoints,
+        routeWhileDragging: false,
+        addWaypoints: false,
+        draggableWaypoints: false,
+        fitSelectedRoutes: false,
+        showAlternatives: false,
+        lineOptions: {
+            styles: [{color: '#0d6efd', opacity: 0.8, weight: 5}]
+        },
+        createMarker: function() { return null; }, // Don't create default markers
+        router: L.Routing.osrmv1({
+            serviceUrl: 'https://router.project-osrm.org/route/v1'
+        })
+    }).addTo(map);
+
+    routingControl.on('routesfound', function(e) {
+        const routes = e.routes;
+        const summary = routes[0].summary;
+
+        console.log('Route found:', {
+            distance: (summary.totalDistance / 1000).toFixed(2) + ' km',
+            duration: Math.round(summary.totalTime / 60) + ' perc'
+        });
+    });
+}
+
+// ========== POI Search ==========
+
+function togglePOISearch() {
+    const panel = document.getElementById('poiSearchPanel');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+    } else {
+        panel.style.display = 'none';
+        clearPOIs();
+    }
+}
+
+async function searchPOIs() {
+    if (!map) return;
+
+    const poiType = document.getElementById('poiType').value;
+    const bounds = map.getBounds();
+
+    clearPOIs();
+
+    const overpassQuery = buildOverpassQuery(poiType, bounds);
+
+    try {
+        const response = await fetch('https://overpass-api.de/api/interpreter', {
+            method: 'POST',
+            body: overpassQuery
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            displayPOIResults(data.elements, poiType);
+        } else {
+            showError('POI keresés sikertelen');
+        }
+    } catch (error) {
+        showError('POI keresés hiba történt');
+        console.error(error);
+    }
+}
+
+function buildOverpassQuery(poiType, bounds) {
+    const south = bounds.getSouth();
+    const west = bounds.getWest();
+    const north = bounds.getNorth();
+    const east = bounds.getEast();
+
+    const typeMap = {
+        'restaurant': 'amenity=restaurant',
+        'theatre': 'amenity=theatre',
+        'museum': 'tourism=museum',
+        'attraction': 'tourism=attraction',
+        'hotel': 'tourism=hotel',
+        'cafe': 'amenity=cafe'
+    };
+
+    const osmTag = typeMap[poiType] || 'tourism=attraction';
+
+    return `[out:json][timeout:25];
+(
+  node["${osmTag.split('=')[0]}"="${osmTag.split('=')[1]}"](${south},${west},${north},${east});
+  way["${osmTag.split('=')[0]}"="${osmTag.split('=')[1]}"](${south},${west},${north},${east});
+);
+out center 100;`;
+}
+
+function displayPOIResults(pois, poiType) {
+    const resultsDiv = document.getElementById('poiResults');
+
+    if (pois.length === 0) {
+        resultsDiv.innerHTML = '<p class="text-muted">Nincs találat</p>';
+        return;
+    }
+
+    resultsDiv.innerHTML = `<p class="text-success">Találatok: ${pois.length}</p>`;
+
+    // Add POI markers to map
+    pois.forEach(poi => {
+        const lat = poi.lat || (poi.center ? poi.center.lat : null);
+        const lon = poi.lon || (poi.center ? poi.center.lon : null);
+
+        if (!lat || !lon) return;
+
+        const name = poi.tags?.name || 'Névtelen';
+
+        // Create custom icon based on type
+        const icon = L.divIcon({
+            className: 'poi-marker',
+            html: `<div style="background-color: #28a745; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
+                     <span style="font-size: 18px;">📍</span>
+                   </div>`,
+            iconSize: [30, 30]
+        });
+
+        const marker = L.marker([lat, lon], { icon }).addTo(map);
+
+        const popupContent = `
+            <div class="popup-title">${name}</div>
+            <div class="popup-info">
+                <p><strong>Típus:</strong> ${getPoiTypeText(poiType)}</p>
+                ${poi.tags?.address ? `<p><strong>Cím:</strong> ${poi.tags.address}</p>` : ''}
+                ${currentTrip ? `<button class="btn btn-sm btn-primary mt-2" onclick="addPOIAsWaypoint(${lat}, ${lon}, '${name.replace(/'/g, "\\'")}', '${poiType}')">Hozzáadás állomásként</button>` : ''}
+            </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        poiMarkers.push(marker);
+    });
+
+    showSuccess(`${pois.length} POI megjelenítve a térképen`);
+}
+
+function clearPOIs() {
+    poiMarkers.forEach(marker => map.removeLayer(marker));
+    poiMarkers = [];
+    document.getElementById('poiResults').innerHTML = '';
+}
+
+function getPoiTypeText(type) {
+    const types = {
+        'restaurant': 'Étterem',
+        'theatre': 'Színház',
+        'museum': 'Múzeum',
+        'attraction': 'Látnivaló',
+        'hotel': 'Szálló',
+        'cafe': 'Kávézó'
+    };
+    return types[type] || 'Egyéb';
+}
+
+async function addPOIAsWaypoint(lat, lng, name, poiType) {
+    if (!currentTrip) {
+        showError('Nincs kiválasztott utazás!');
+        return;
+    }
+
+    // Map POI type to waypoint type
+    const typeMap = {
+        'restaurant': 0, // Restaurant
+        'cafe': 0,       // Restaurant
+        'hotel': 1,      // Accommodation
+        'attraction': 2, // Attraction
+        'theatre': 2,    // Attraction
+        'museum': 2      // Attraction
+    };
+
+    const waypointType = typeMap[poiType] || 5; // Default to Other
+    const orderIndex = currentTrip.waypoints.length;
+
+    try {
+        const response = await fetch(`${API_URL}/trips/${currentTrip.id}/waypoints`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentUser.token}`
+            },
+            body: JSON.stringify({
+                name,
+                latitude: lat,
+                longitude: lng,
+                type: waypointType,
+                orderIndex
+            })
+        });
+
+        if (response.ok) {
+            selectTrip(currentTrip.id);
+            showSuccess(`${name} hozzáadva az úthoz!`);
+        } else {
+            showError('Nem sikerült hozzáadni az állomást');
+        }
+    } catch (error) {
+        showError('Hálózati hiba történt');
+        console.error(error);
+    }
+}
+
+// ========== Invitation handlers ==========
+
+async function checkInvitations() {
+    if (!currentUser) return;
+
+    try {
+        const response = await fetch(`${API_URL}/invitations/my`, {
+            headers: {
+                'Authorization': `Bearer ${currentUser.token}`
+            }
+        });
+
+        if (response.ok) {
+            const invitations = await response.json();
+            const badge = document.getElementById('invitationsBadge');
+
+            if (invitations.length > 0) {
+                badge.textContent = invitations.length;
+                badge.style.display = 'inline';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Meghívások betöltése sikertelen:', error);
+    }
+}
+
+async function loadMyInvitations() {
+    if (!currentUser) return;
+
+    const invitationsList = document.getElementById('invitationsList');
+    invitationsList.innerHTML = '<p class="text-muted">Betöltés...</p>';
+
+    try {
+        const response = await fetch(`${API_URL}/invitations/my`, {
+            headers: {
+                'Authorization': `Bearer ${currentUser.token}`
+            }
+        });
+
+        if (response.ok) {
+            const invitations = await response.json();
+            displayInvitations(invitations);
+        } else {
+            invitationsList.innerHTML = '<p class="text-danger">Hiba történt a betöltés során</p>';
+        }
+    } catch (error) {
+        invitationsList.innerHTML = '<p class="text-danger">Hálózati hiba</p>';
+        console.error(error);
+    }
+}
+
+function displayInvitations(invitations) {
+    const invitationsList = document.getElementById('invitationsList');
+
+    if (invitations.length === 0) {
+        invitationsList.innerHTML = '<p class="text-muted">Nincs meghívásod</p>';
+        return;
+    }
+
+    invitationsList.innerHTML = invitations.map(inv => `
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">${inv.tripTitle}</h5>
+                <p class="card-text">
+                    <strong>Meghívó:</strong> ${inv.invitedByName}<br>
+                    <strong>Szerepkör:</strong> ${getParticipantRoleText(inv.role)}<br>
+                    <strong>Dátum:</strong> ${new Date(inv.createdAt).toLocaleDateString('hu-HU')}<br>
+                    ${inv.message ? `<strong>Üzenet:</strong> ${inv.message}<br>` : ''}
+                </p>
+                <div class="btn-group w-100">
+                    <button class="btn btn-success" onclick="respondToInvitation(${inv.id}, 1)">Elfogadás</button>
+                    <button class="btn btn-danger" onclick="respondToInvitation(${inv.id}, 2)">Elutasítás</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function respondToInvitation(invitationId, status) {
+    if (!currentUser) return;
+
+    try {
+        const response = await fetch(`${API_URL}/invitations/${invitationId}/respond`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentUser.token}`
+            },
+            body: JSON.stringify({ status })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            showSuccess(data.message);
+            loadMyInvitations();
+            checkInvitations();
+            loadTrips();
+        } else {
+            showError('Hiba történt a meghívó feldolgozása során');
+        }
+    } catch (error) {
+        showError('Hálózati hiba történt');
+        console.error(error);
+    }
+}
+
+function showInviteModal() {
+    if (!currentTrip) {
+        showError('Nincs kiválasztott utazás!');
+        return;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('inviteModal'));
+    modal.show();
+}
+
+async function handleInvite(e) {
+    e.preventDefault();
+
+    if (!currentTrip) return;
+
+    const email = document.getElementById('inviteEmail').value;
+    const role = parseInt(document.getElementById('inviteRole').value);
+    const canEdit = document.getElementById('inviteCanEdit').checked;
+    const message = document.getElementById('inviteMessage').value;
+
+    try {
+        const response = await fetch(`${API_URL}/invitations/trip/${currentTrip.id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentUser.token}`
+            },
+            body: JSON.stringify({ invitedEmail: email, role, canEdit, message })
+        });
+
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('inviteModal')).hide();
+            document.getElementById('inviteForm').reset();
+            showSuccess('Meghívó sikeresen elküldve!');
+        } else {
+            const error = await response.json();
+            showError(error.message || 'Nem sikerült elküldeni a meghívót');
+        }
+    } catch (error) {
+        showError('Hálózati hiba történt');
+        console.error(error);
+    }
+}
+
+function getParticipantRoleText(role) {
+    const roles = {
+        0: 'Tulajdonos',
+        1: 'Szervező',
+        2: 'Résztvevő'
+    };
+    return roles[role] || 'Ismeretlen';
+}
+
+// ========== Export & Compare ==========
+
 async function exportToPdf() {
     if (!currentTrip) return;
 
@@ -433,7 +836,6 @@ async function exportToPdf() {
     }
 }
 
-// Compare trip
 async function compareTrip() {
     if (!currentTrip) return;
 
@@ -446,7 +848,6 @@ async function compareTrip() {
         });
 
         if (response.ok) {
-            const data = await response.json();
             selectTrip(currentTrip.id);
             showSuccess('Összehasonlítás elkészítve!');
         } else {
@@ -458,7 +859,8 @@ async function compareTrip() {
     }
 }
 
-// Helper functions
+// ========== Helper functions ==========
+
 function getTripStatusText(status) {
     const statuses = {
         0: 'Tervezés',
@@ -517,3 +919,4 @@ function showError(message) {
 function showInfo(message) {
     alert(message);
 }
+

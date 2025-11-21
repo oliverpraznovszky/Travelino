@@ -17,6 +17,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PlannedRoute> PlannedRoutes { get; set; }
     public DbSet<ActualRoute> ActualRoutes { get; set; }
     public DbSet<TripNote> TripNotes { get; set; }
+    public DbSet<TripInvitation> TripInvitations { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -73,6 +74,25 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .HasForeignKey(tn => tn.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // TripInvitation configuration
+        builder.Entity<TripInvitation>()
+            .HasOne(ti => ti.Trip)
+            .WithMany()
+            .HasForeignKey(ti => ti.TripId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<TripInvitation>()
+            .HasOne(ti => ti.InvitedBy)
+            .WithMany()
+            .HasForeignKey(ti => ti.InvitedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<TripInvitation>()
+            .HasOne(ti => ti.InvitedUser)
+            .WithMany()
+            .HasForeignKey(ti => ti.InvitedUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Indexes
         builder.Entity<Trip>()
             .HasIndex(t => t.CreatedByUserId);
@@ -86,5 +106,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<Waypoint>()
             .HasIndex(w => new { w.TripId, w.OrderIndex });
+
+        builder.Entity<TripInvitation>()
+            .HasIndex(ti => new { ti.TripId, ti.InvitedEmail });
+
+        builder.Entity<TripInvitation>()
+            .HasIndex(ti => ti.Status);
     }
 }

@@ -27,11 +27,25 @@ A Travelino egy komplex utazástervező és naplózó alkalmazás, amely egyesí
   - Benzinkutak
   - Parkolók
   - Egyéb helyszínek
+- **POI (Points of Interest) keresés**
+  - OpenStreetMap Overpass API integráció
+  - Éttermek, színházak, múzeumok, látnivalók keresése
+  - Térképen megjelenítés és rákattintható markerek
+  - Egy kattintással állomásként hozzáadás
+- **Automatikus útvonaltervezés**
+  - Leaflet Routing Machine + OSRM integráció
+  - Útvonal megjelenítés állomások között
+  - Távolság és időtartam számítás
 
-### 4. Közös szerkesztés
+### 4. Közös szerkesztés és meghívók
 - Csoportos utazások támogatása
 - Résztvevői szerepkörök (Tulajdonos, Szervező, Résztvevő)
 - Szerkesztési jogosultságok
+- **Email alapú meghívó rendszer**
+  - Felhasználók meghívása email címmel
+  - Meghívások elfogadása/elutasítása az alkalmazáson belül
+  - Értesítési badge a függőben lévő meghívókról
+  - Szerepkörök és jogosultságok beállítása
 
 ### 5. Tervezés és naplózás
 - Tervezett útvonalak és időpontok rögzítése
@@ -62,6 +76,8 @@ A Travelino egy komplex utazástervező és naplózó alkalmazás, amely egyesí
 - **HTML5, CSS3, JavaScript**
 - **Bootstrap 5** - UI framework
 - **Leaflet.js** - interaktív térkép
+- **Leaflet Routing Machine** - útvonaltervezés
+- **OpenStreetMap Overpass API** - POI keresés
 - **Vanilla JavaScript** - SPA funkcionalitás
 
 ## Projekt struktúra
@@ -71,17 +87,20 @@ Travelino/
 ├── Controllers/           # API kontrollerek
 │   ├── AuthController.cs
 │   ├── TripsController.cs
-│   └── WaypointsController.cs
+│   ├── WaypointsController.cs
+│   └── InvitationsController.cs
 ├── Data/                  # Adatbázis context
 │   └── ApplicationDbContext.cs
 ├── DTOs/                  # Data Transfer Objects
 │   ├── AuthDTOs.cs
 │   ├── TripDTOs.cs
-│   └── WaypointDTOs.cs
+│   ├── WaypointDTOs.cs
+│   └── InvitationDTOs.cs
 ├── Models/                # Adatbázis modellek
 │   ├── ApplicationUser.cs
 │   ├── Trip.cs
 │   ├── TripParticipant.cs
+│   ├── TripInvitation.cs
 │   ├── Waypoint.cs
 │   ├── PlannedRoute.cs
 │   ├── ActualRoute.cs
@@ -108,15 +127,18 @@ Travelino/
 2. **AspNetRoles** - Szerepkörök (Identity)
 3. **Trips** - Utazások
 4. **TripParticipants** - Utazás résztvevők
-5. **Waypoints** - Útvonal állomások
-6. **PlannedRoutes** - Tervezett útvonalak
-7. **ActualRoutes** - Tényleges útvonalak
-8. **TripNotes** - Jegyzetek
+5. **TripInvitations** - Meghívók
+6. **Waypoints** - Útvonal állomások
+7. **PlannedRoutes** - Tervezett útvonalak
+8. **ActualRoutes** - Tényleges útvonalak
+9. **TripNotes** - Jegyzetek
 
 ### Entity Relationships
 
 - User 1:N Trip (CreatedBy)
 - User N:M Trip (Participants)
+- User 1:N TripInvitation (InvitedBy)
+- Trip 1:N TripInvitation
 - Trip 1:N Waypoint
 - Trip 1:N PlannedRoute
 - Trip 1:N ActualRoute
@@ -216,6 +238,13 @@ http://localhost:5000/swagger
 - `PUT /api/trips/{tripId}/waypoints/{id}` - Állomás módosítása
 - `DELETE /api/trips/{tripId}/waypoints/{id}` - Állomás törlése
 
+#### Meghívások (Invitations)
+- `GET /api/invitations/my` - Saját meghívások lekérése
+- `GET /api/invitations/trip/{tripId}` - Utazáshoz tartozó meghívások
+- `POST /api/invitations/trip/{tripId}` - Meghívó létrehozása
+- `POST /api/invitations/{id}/respond` - Meghívóra válaszolás (elfogadás/elutasítás)
+- `DELETE /api/invitations/{id}` - Meghívó törlése
+
 ## Használati útmutató
 
 ### 1. Regisztráció/Bejelentkezés
@@ -228,22 +257,46 @@ http://localhost:5000/swagger
 - Mentsd el
 
 ### 3. Állomások hozzáadása
+
+#### 3.1 Manuális hozzáadás
 - Válassz ki egy utazást a listából
 - Kattints az "Állomás hozzáadása" gombra
 - Kattints a térképre a pozíció megjelöléséhez
 - Töltsd ki az állomás adatait (név, típus, cím)
 
-### 4. Résztvevők hozzáadása
-- Nyisd meg az utazás részleteit
-- Add meg a résztvevő email címét
-- Állítsd be a jogosultságokat
+#### 3.2 POI keresés használata
+- Kattints a "POI Keresés" gombra
+- Válaszd ki a keresett típust (étterem, színház, múzeum, stb.)
+- Kattints a "Keresés" gombra
+- A térkép mutatja az adott típusú helyeket
+- Kattints egy POI markerre és válaszd a "Hozzáadás állomásként" opciót
 
-### 5. PDF Export
+### 4. Meghívók kezelése
+
+#### 4.1 Meghívó küldése
+- Válassz ki egy utazást
+- Kattints a "Meghívás" gombra
+- Add meg a meghívandó felhasználó email címét
+- Állítsd be a szerepkört és jogosultságokat
+- Opcionálisan adj hozzá üzenetet
+- Küldd el a meghívót
+
+#### 4.2 Meghívó elfogadása
+- Kattints a "Meghívások" gombra a felső menüben
+- Nézd meg a függőben lévő meghívókat
+- Válaszd az "Elfogadás" vagy "Elutasítás" opciót
+
+### 5. Útvonaltervezés
+- Az állomások automatikusan összekapcsolódnak
+- A kék vonal mutatja az optimális útvonalat
+- Az útvonal frissül amikor új állomást adsz hozzá
+
+### 6. PDF Export
 - Válassz ki egy utazást
 - Kattints a "PDF Export" gombra
 - A PDF automatikusan letöltődik
 
-### 6. Összehasonlítás
+### 7. Összehasonlítás
 - Rögzítsd a tényleges érkezési/indulási időpontokat az állomásoknál
 - Kattints az "Összehasonlítás" gombra
 - Az eredmény megjelenik az utazás részleteiben
