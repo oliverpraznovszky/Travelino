@@ -1,0 +1,6 @@
+@Travelino_HostAddress = http://localhost:5299
+
+GET {{Travelino_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
