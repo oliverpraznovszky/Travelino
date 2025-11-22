@@ -56,9 +56,6 @@ public class TripsController : ControllerBase
             .Include(t => t.CreatedBy)
             .Include(t => t.Participants).ThenInclude(p => p.User)
             .Include(t => t.Waypoints)
-            .Include(t => t.Notes).ThenInclude(n => n.User)
-            .Include(t => t.PlannedRoutes)
-            .Include(t => t.ActualRoutes)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (trip == null)
@@ -250,9 +247,6 @@ public class TripsController : ControllerBase
             .Include(t => t.CreatedBy)
             .Include(t => t.Participants).ThenInclude(p => p.User)
             .Include(t => t.Waypoints)
-            .Include(t => t.Notes).ThenInclude(n => n.User)
-            .Include(t => t.PlannedRoutes)
-            .Include(t => t.ActualRoutes)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (trip == null)
@@ -281,8 +275,6 @@ public class TripsController : ControllerBase
         var trip = await _context.Trips
             .Include(t => t.Participants)
             .Include(t => t.Waypoints)
-            .Include(t => t.PlannedRoutes)
-            .Include(t => t.ActualRoutes)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (trip == null)
@@ -321,20 +313,6 @@ public class TripsController : ControllerBase
                     var diff = waypoint.ActualDeparture.Value - waypoint.PlannedDeparture.Value;
                     comparison.AppendLine($"  Indulás: Tervezett: {waypoint.PlannedDeparture:yyyy.MM.dd HH:mm}, Tényleges: {waypoint.ActualDeparture:yyyy.MM.dd HH:mm}, Eltérés: {diff.TotalHours:F1} óra");
                 }
-            }
-        }
-
-        // Compare routes
-        if (trip.PlannedRoutes.Any() && trip.ActualRoutes.Any())
-        {
-            comparison.AppendLine("\n\nÚtvonalak:");
-            var plannedRoute = trip.PlannedRoutes.FirstOrDefault(r => r.IsPrimary);
-            var actualRoute = trip.ActualRoutes.FirstOrDefault();
-
-            if (plannedRoute != null && actualRoute != null)
-            {
-                comparison.AppendLine($"Távolság: Tervezett: {plannedRoute.EstimatedDistance:F1} km, Tényleges: {actualRoute.ActualDistance:F1} km");
-                comparison.AppendLine($"Időtartam: Tervezett: {plannedRoute.EstimatedDuration} perc, Tényleges: {actualRoute.ActualDuration} perc");
             }
         }
 

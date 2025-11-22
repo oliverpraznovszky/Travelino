@@ -22,6 +22,11 @@ function InvitationsModal() {
       await api.respondToInvitation(invitationId, status);
       alert(status === 1 ? 'Meghívó elfogadva!' : 'Meghívó elutasítva!');
       loadInvitations();
+
+      // If accepted, reload the page to refresh trips list
+      if (status === 1) {
+        window.location.reload();
+      }
     } catch (error) {
       alert('Hiba történt a válaszadás során');
     }

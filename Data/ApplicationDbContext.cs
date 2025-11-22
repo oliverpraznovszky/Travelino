@@ -14,14 +14,20 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Trip> Trips { get; set; }
     public DbSet<TripParticipant> TripParticipants { get; set; }
     public DbSet<Waypoint> Waypoints { get; set; }
-    public DbSet<PlannedRoute> PlannedRoutes { get; set; }
-    public DbSet<ActualRoute> ActualRoutes { get; set; }
-    public DbSet<TripNote> TripNotes { get; set; }
     public DbSet<TripInvitation> TripInvitations { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        // Rename Identity tables to remove AspNet prefix
+        builder.Entity<ApplicationUser>().ToTable("Users");
+        builder.Entity<Microsoft.AspNetCore.Identity.IdentityRole>().ToTable("Roles");
+        builder.Entity<Microsoft.AspNetCore.Identity.IdentityUserRole<string>>().ToTable("UserRoles");
+        builder.Entity<Microsoft.AspNetCore.Identity.IdentityUserClaim<string>>().ToTable("UserClaims");
+        builder.Entity<Microsoft.AspNetCore.Identity.IdentityUserLogin<string>>().ToTable("UserLogins");
+        builder.Entity<Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>>().ToTable("RoleClaims");
+        builder.Entity<Microsoft.AspNetCore.Identity.IdentityUserToken<string>>().ToTable("UserTokens");
 
         // Trip configuration
         builder.Entity<Trip>()
@@ -42,36 +48,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .HasForeignKey(w => w.TripId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.Entity<Trip>()
-            .HasMany(t => t.PlannedRoutes)
-            .WithOne(r => r.Trip)
-            .HasForeignKey(r => r.TripId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        builder.Entity<Trip>()
-            .HasMany(t => t.ActualRoutes)
-            .WithOne(r => r.Trip)
-            .HasForeignKey(r => r.TripId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        builder.Entity<Trip>()
-            .HasMany(t => t.Notes)
-            .WithOne(n => n.Trip)
-            .HasForeignKey(n => n.TripId)
-            .OnDelete(DeleteBehavior.Cascade);
-
         // TripParticipant configuration
         builder.Entity<TripParticipant>()
             .HasOne(tp => tp.User)
             .WithMany(u => u.TripParticipations)
             .HasForeignKey(tp => tp.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // TripNote configuration
-        builder.Entity<TripNote>()
-            .HasOne(tn => tn.User)
-            .WithMany()
-            .HasForeignKey(tn => tn.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
         // TripInvitation configuration

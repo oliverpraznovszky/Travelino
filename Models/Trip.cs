@@ -40,9 +40,6 @@ public class Trip
 
     public virtual ICollection<TripParticipant> Participants { get; set; } = new List<TripParticipant>();
     public virtual ICollection<Waypoint> Waypoints { get; set; } = new List<Waypoint>();
-    public virtual ICollection<PlannedRoute> PlannedRoutes { get; set; } = new List<PlannedRoute>();
-    public virtual ICollection<ActualRoute> ActualRoutes { get; set; } = new List<ActualRoute>();
-    public virtual ICollection<TripNote> Notes { get; set; } = new List<TripNote>();
 }
 
 public enum TripStatus
