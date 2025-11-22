@@ -223,6 +223,7 @@ async function handleCreateTrip(e) {
     const startDate = document.getElementById('tripStartDate').value;
     const endDate = document.getElementById('tripEndDate').value;
     const isPublic = document.getElementById('tripIsPublic').checked;
+    const travelMode = parseInt(document.getElementById('tripTravelMode').value);
 
     try {
         const response = await fetch(`${API_URL}/trips`, {
@@ -231,7 +232,7 @@ async function handleCreateTrip(e) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${currentUser.token}`
             },
-            body: JSON.stringify({ title, description, startDate, endDate, isPublic })
+            body: JSON.stringify({ title, description, startDate, endDate, isPublic, travelMode })
         });
 
         if (response.ok) {
@@ -294,11 +295,15 @@ function displayTripDetails(trip) {
     const detailsCard = document.getElementById('tripDetailsCard');
     const details = document.getElementById('tripDetails');
 
+    const travelModeText = trip.travelMode === 0 ? '🚶 Gyalog' : '🚗 Autóval';
+    const travelModeColor = trip.travelMode === 0 ? 'success' : 'primary';
+
     details.innerHTML = `
         <h5>${trip.title}</h5>
         <p>${trip.description || 'Nincs leírás'}</p>
         <p><strong>Időpont:</strong> ${new Date(trip.startDate).toLocaleDateString('hu-HU')} - ${new Date(trip.endDate).toLocaleDateString('hu-HU')}</p>
         <p><strong>Státusz:</strong> <span class="badge bg-${getTripStatusColor(trip.status)}">${getTripStatusText(trip.status)}</span></p>
+        <p><strong>Utazási mód:</strong> <span class="badge bg-${travelModeColor}">${travelModeText}</span></p>
         <p><strong>Résztvevők:</strong> ${trip.participants.length}</p>
         ${trip.comparisonNotes ? `
             <div class="alert alert-info">
@@ -438,9 +443,13 @@ function updateRouting(waypoints) {
     }
 
     // Need at least 2 waypoints for routing
-    if (waypoints.length < 2) {
+    if (waypoints.length < 2 || !currentTrip) {
         return;
     }
+
+    // Determine routing profile based on travel mode
+    // TravelMode: 0 = Walking, 1 = Driving
+    const profile = currentTrip.travelMode === 0 ? 'foot' : 'car';
 
     // Create waypoints for routing (max 25 waypoints for OSRM)
     const routeWaypoints = waypoints
@@ -455,11 +464,12 @@ function updateRouting(waypoints) {
         fitSelectedRoutes: false,
         showAlternatives: false,
         lineOptions: {
-            styles: [{color: '#0d6efd', opacity: 0.8, weight: 5}]
+            styles: [{color: currentTrip.travelMode === 0 ? '#28a745' : '#0d6efd', opacity: 0.8, weight: 5}]
         },
         createMarker: function() { return null; }, // Don't create default markers
         router: L.Routing.osrmv1({
-            serviceUrl: 'https://router.project-osrm.org/route/v1'
+            serviceUrl: `https://router.project-osrm.org/route/v1`,
+            profile: profile
         })
     }).addTo(map);
 
@@ -467,7 +477,9 @@ function updateRouting(waypoints) {
         const routes = e.routes;
         const summary = routes[0].summary;
 
+        const travelModeText = currentTrip.travelMode === 0 ? 'Gyalog' : 'Autóval';
         console.log('Route found:', {
+            mode: travelModeText,
             distance: (summary.totalDistance / 1000).toFixed(2) + ' km',
             duration: Math.round(summary.totalTime / 60) + ' perc'
         });

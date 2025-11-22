@@ -31,6 +31,8 @@ public class Trip
 
     public bool IsPublic { get; set; } = false;
 
+    public TravelMode TravelMode { get; set; } = TravelMode.Driving;
+
     // Calculated field for planned vs actual comparison
     public string? ComparisonNotes { get; set; }
 
@@ -52,4 +54,10 @@ public enum TripStatus
     InProgress,    // Folyamatban
     Completed,     // Befejezett
     Cancelled      // Törölt
+}
+
+public enum TravelMode
+{
+    Walking,       // Gyalog
+    Driving        // Autóval
 }

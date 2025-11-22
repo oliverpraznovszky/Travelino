@@ -66,6 +66,9 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<PdfExportService>();
 
+// Add HttpClient for external API calls
+builder.Services.AddHttpClient();
+
 builder.Services.AddControllers();
 
 // Swagger/OpenAPI
@@ -106,7 +109,10 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.RoutePrefix = "swagger"; // Keep Swagger at /swagger
+    });
 }
 
 app.UseHttpsRedirection();
@@ -120,7 +126,10 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Fallback to index.html for SPA
+// Redirect root to index.html
+app.MapGet("/", () => Results.Redirect("/index.html")).ExcludeFromDescription();
+
+// Fallback to index.html for SPA routes
 app.MapFallbackToFile("index.html");
 
 app.Run();
