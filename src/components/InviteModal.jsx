@@ -24,7 +24,15 @@ function InviteModal({ trip, onInviteSent }) {
     setLoading(true);
 
     try {
-      await api.createInvitation(trip.id, formData);
+      // Map frontend role to backend format
+      const invitationData = {
+        invitedEmail: formData.invitedEmail,
+        role: 2, // Always Member (0=Owner, 1=Organizer, 2=Member)
+        canEdit: formData.role === 'Editor', // true if Editor, false if Viewer
+        message: formData.message,
+      };
+
+      await api.createInvitation(trip.id, invitationData);
 
       // Close modal
       const modal = window.bootstrap.Modal.getInstance(
