@@ -1,6 +1,7 @@
-const API_URL = window.location.hostname === 'localhost'
-  ? 'https://localhost:7000/api'
-  : '/api';
+// In development, use Vite proxy (/api -> https://localhost:7000/api)
+// In production, use relative path
+const API_URL = import.meta.env.DEV ? '/api' : '/api';
+
 
 class ApiService {
   constructor() {
