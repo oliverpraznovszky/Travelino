@@ -12,7 +12,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
 
-function MapPanel({ trip, onTripUpdate }) {
+function MapPanel({ trip, onTripUpdate, onWaypointModalOpen, onDeleteWaypoint }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
@@ -21,6 +21,7 @@ function MapPanel({ trip, onTripUpdate }) {
   const [showPOI, setShowPOI] = useState(false);
   const [poiType, setPoiType] = useState('restaurant');
   const [searching, setSearching] = useState(false);
+  const [addingWaypoint, setAddingWaypoint] = useState(false);
 
   useEffect(() => {
     // Initialize map
@@ -31,6 +32,20 @@ function MapPanel({ trip, onTripUpdate }) {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19,
       }).addTo(mapInstanceRef.current);
+
+      // Add map click handler for adding waypoints
+      mapInstanceRef.current.on('click', (e) => {
+        if (addingWaypoint && trip && onWaypointModalOpen) {
+          onWaypointModalOpen({
+            latitude: e.latlng.lat,
+            longitude: e.latlng.lng,
+            name: 'Új állomás',
+            description: '',
+            address: '',
+          });
+          setAddingWaypoint(false);
+        }
+      });
     }
 
     return () => {
@@ -39,7 +54,25 @@ function MapPanel({ trip, onTripUpdate }) {
         mapInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [addingWaypoint, trip, onWaypointModalOpen]);
+
+  // Make POI-to-waypoint function globally available
+  useEffect(() => {
+    window.addPOIAsWaypoint = (lat, lon, name, cuisine, address) => {
+      if (onWaypointModalOpen) {
+        onWaypointModalOpen({
+          latitude: lat,
+          longitude: lon,
+          name: name,
+          description: cuisine,
+          address: address,
+        });
+      }
+    };
+    return () => {
+      delete window.addPOIAsWaypoint;
+    };
+  }, [onWaypointModalOpen]);
 
   useEffect(() => {
     if (!mapInstanceRef.current || !trip) return;
@@ -59,13 +92,23 @@ function MapPanel({ trip, onTripUpdate }) {
       const sortedWaypoints = [...trip.waypoints].sort((a, b) => a.orderIndex - b.orderIndex);
 
       sortedWaypoints.forEach((waypoint, index) => {
+        const popupContent = `
+          <div>
+            <strong>${index + 1}. ${waypoint.name}</strong><br/>
+            ${waypoint.description ? `${waypoint.description}<br/>` : ''}
+            ${waypoint.address ? `${waypoint.address}<br/>` : ''}
+            <button
+              class="btn btn-danger btn-sm mt-2 w-100"
+              onclick="window.deleteWaypoint(${trip.id}, ${waypoint.id})"
+            >
+              <i class="bi bi-trash"></i> Törlés
+            </button>
+          </div>
+        `;
+
         const marker = L.marker([waypoint.latitude, waypoint.longitude])
           .addTo(mapInstanceRef.current)
-          .bindPopup(
-            `<strong>${index + 1}. ${waypoint.name}</strong><br/>
-             ${waypoint.description || ''}<br/>
-             ${waypoint.address || ''}`
-          );
+          .bindPopup(popupContent);
         markersRef.current.push(marker);
       });
 
@@ -147,13 +190,23 @@ function MapPanel({ trip, onTripUpdate }) {
             shadowSize: [41, 41],
           });
 
-          const marker = L.marker([lat, lon], { icon: poiIcon })
-            .addTo(mapInstanceRef.current)
-            .bindPopup(`
+          const popupContent = `
+            <div>
               <strong>${element.tags?.name || 'Névtelen POI'}</strong><br/>
               ${element.tags?.cuisine ? `Konyha: ${element.tags.cuisine}<br/>` : ''}
               ${element.tags?.addr?.street ? `Cím: ${element.tags.addr.street}<br/>` : ''}
-            `);
+              <button
+                class="btn btn-primary btn-sm mt-2 w-100"
+                onclick="window.addPOIAsWaypoint(${lat}, ${lon}, '${(element.tags?.name || 'POI').replace(/'/g, "\\'")}', '${(element.tags?.cuisine || '').replace(/'/g, "\\'")}', '${(element.tags?.addr?.street || '').replace(/'/g, "\\'")}')"
+              >
+                <i class="bi bi-plus-circle"></i> Hozzáadás állomásként
+              </button>
+            </div>
+          `;
+
+          const marker = L.marker([lat, lon], { icon: poiIcon })
+            .addTo(mapInstanceRef.current)
+            .bindPopup(popupContent);
 
           poiMarkersRef.current.push(marker);
         }
@@ -230,6 +283,9 @@ function MapPanel({ trip, onTripUpdate }) {
             top: '10px',
             left: '10px',
             zIndex: 1000,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '5px',
           }}
         >
           <button
@@ -238,6 +294,13 @@ function MapPanel({ trip, onTripUpdate }) {
             title="POI Keresés"
           >
             <i className="bi bi-search"></i>
+          </button>
+          <button
+            className={`btn btn-sm ${addingWaypoint ? 'btn-danger' : 'btn-success'}`}
+            onClick={() => setAddingWaypoint(!addingWaypoint)}
+            title="Állomás hozzáadása térképről"
+          >
+            <i className={`bi ${addingWaypoint ? 'bi-x-circle' : 'bi-geo-alt-fill'}`}></i>
           </button>
         </div>
       )}

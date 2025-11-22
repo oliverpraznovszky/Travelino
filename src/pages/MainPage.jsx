@@ -5,12 +5,14 @@ import TripDetails from '../components/TripDetails';
 import CreateTripModal from '../components/CreateTripModal';
 import EditTripModal from '../components/EditTripModal';
 import InvitationsModal from '../components/InvitationsModal';
+import AddWaypointModal from '../components/AddWaypointModal';
 import api from '../services/api';
 
 function MainPage() {
   const [trips, setTrips] = useState([]);
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [waypointModalData, setWaypointModalData] = useState(null);
 
   useEffect(() => {
     loadTrips();
@@ -54,12 +56,38 @@ function MainPage() {
     loadTrips();
   };
 
+  const handleDeleteWaypoint = async (tripId, waypointId) => {
+    if (!confirm('Biztosan törölni szeretnéd ezt az állomást?')) {
+      return;
+    }
+    try {
+      await api.deleteWaypoint(tripId, waypointId);
+      handleTripUpdated();
+    } catch (error) {
+      console.error('Failed to delete waypoint:', error);
+      alert('Nem sikerült törölni az állomást');
+    }
+  };
+
+  // Make delete function globally available for Leaflet popup buttons
+  useEffect(() => {
+    window.deleteWaypoint = handleDeleteWaypoint;
+    return () => {
+      delete window.deleteWaypoint;
+    };
+  }, [selectedTrip]);
+
   return (
     <>
       <div className="main-layout">
         {/* Bal oldal - Térkép */}
         <div className="map-panel">
-          <MapPanel trip={selectedTrip} onTripUpdate={handleTripUpdated} />
+          <MapPanel
+            trip={selectedTrip}
+            onTripUpdate={handleTripUpdated}
+            onWaypointModalOpen={setWaypointModalData}
+            onDeleteWaypoint={handleDeleteWaypoint}
+          />
         </div>
 
         {/* Jobb oldal - Tartalom */}
@@ -102,6 +130,16 @@ function MainPage() {
         <EditTripModal trip={selectedTrip} onTripUpdated={handleTripUpdated} />
       )}
       <InvitationsModal />
+      {selectedTrip && waypointModalData && (
+        <AddWaypointModal
+          trip={selectedTrip}
+          onWaypointAdded={() => {
+            setWaypointModalData(null);
+            handleTripUpdated();
+          }}
+          prefilledData={waypointModalData}
+        />
+      )}
     </>
   );
 }
