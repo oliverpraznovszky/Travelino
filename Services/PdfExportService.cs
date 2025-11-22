@@ -125,22 +125,6 @@ public class PdfExportService
                             }
                         }
 
-                        // Notes
-                        if (trip.Notes.Any())
-                        {
-                            column.Item().PaddingTop(20).Text("Jegyzetek").SemiBold().FontSize(16);
-
-                            foreach (var note in trip.Notes.OrderByDescending(n => n.CreatedAt))
-                            {
-                                column.Item().Column(noteColumn =>
-                                {
-                                    noteColumn.Item().Text($"{note.Title}").SemiBold();
-                                    noteColumn.Item().Text($"   {note.Content}");
-                                    noteColumn.Item().Text($"   Szerző: {note.User.FirstName} {note.User.LastName}, {note.CreatedAt:yyyy.MM.dd}").FontSize(10).Italic();
-                                });
-                            }
-                        }
-
                         // Comparison notes
                         if (!string.IsNullOrEmpty(trip.ComparisonNotes))
                         {
