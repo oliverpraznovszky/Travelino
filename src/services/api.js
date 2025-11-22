@@ -100,7 +100,7 @@ class ApiService {
   }
 
   async exportTripPdf(id) {
-    const response = await this.request(`/trips/${id}/export`);
+    const response = await this.request(`/trips/${id}/export/pdf`);
     return response.blob();
   }
 
