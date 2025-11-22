@@ -28,6 +28,9 @@
                 <button class="btn btn-light" data-bs-toggle="modal" data-bs-target="#registerModal">Regisztráció</button>
             </div>
             <div class="navbar-nav ms-auto d-none" id="userInfo">
+                <button class="btn btn-outline-warning me-2 d-none" id="adminButton" onclick="showAdminPanel()">
+                    <i class="bi bi-shield-fill"></i> Admin felület
+                </button>
                 <button class="btn btn-outline-light me-2 position-relative" data-bs-toggle="modal" data-bs-target="#invitationsModal" onclick="loadMyInvitations()">
                     Meghívások
                     <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="invitationsBadge" style="display: none;">
@@ -116,6 +119,70 @@
                     </div>
                     <div class="card-body">
                         <div id="waypointsList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Panel -->
+        <div class="row mt-3" id="adminPanel" style="display: none;">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h4><i class="bi bi-shield-fill"></i> Admin Felület</h4>
+                    </div>
+                    <div class="card-body">
+                        <ul class="nav nav-tabs" id="adminTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab">Felhasználók kezelése</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="trips-tab" data-bs-toggle="tab" data-bs-target="#trips" type="button" role="tab">Utazások kezelése</button>
+                            </li>
+                        </ul>
+                        <div class="tab-content" id="adminTabsContent">
+                            <!-- Users Tab -->
+                            <div class="tab-pane fade show active" id="users" role="tabpanel">
+                                <div class="mt-3">
+                                    <div class="table-responsive">
+                                        <table class="table table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Email</th>
+                                                    <th>Név</th>
+                                                    <th>Szerepkörök</th>
+                                                    <th>Műveletek</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="usersList">
+                                                <tr><td colspan="4" class="text-center">Töltés...</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Trips Tab -->
+                            <div class="tab-pane fade" id="trips" role="tabpanel">
+                                <div class="mt-3">
+                                    <div class="table-responsive">
+                                        <table class="table table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Cím</th>
+                                                    <th>Létrehozó</th>
+                                                    <th>Dátum</th>
+                                                    <th>Státusz</th>
+                                                    <th>Műveletek</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="adminTripsList">
+                                                <tr><td colspan="5" class="text-center">Töltés...</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

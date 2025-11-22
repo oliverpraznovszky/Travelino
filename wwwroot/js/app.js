@@ -39,11 +39,13 @@ function initMap() {
 function checkAuth() {
     const token = localStorage.getItem('token');
     const userName = localStorage.getItem('userName');
+    const userRoles = localStorage.getItem('userRoles');
 
     if (token && userName) {
         currentUser = {
             token: token,
-            name: userName
+            name: userName,
+            roles: userRoles ? JSON.parse(userRoles) : []
         };
         showUserInfo();
         loadTrips();
@@ -57,6 +59,13 @@ function showUserInfo() {
     document.getElementById('authButtons').classList.add('d-none');
     document.getElementById('userInfo').classList.remove('d-none');
     document.getElementById('userName').textContent = currentUser.name;
+
+    // Show admin button if user is admin
+    if (currentUser.roles && currentUser.roles.includes('Admin')) {
+        document.getElementById('adminButton').classList.remove('d-none');
+    } else {
+        document.getElementById('adminButton').classList.add('d-none');
+    }
 }
 
 function showAuthButtons() {
@@ -72,6 +81,14 @@ function setupEventListeners() {
     document.getElementById('editTripForm').addEventListener('submit', handleEditTrip);
     document.getElementById('addWaypointForm').addEventListener('submit', handleAddWaypoint);
     document.getElementById('inviteForm').addEventListener('submit', handleInvite);
+
+    // Admin tabs event listener
+    const tripsTab = document.getElementById('trips-tab');
+    if (tripsTab) {
+        tripsTab.addEventListener('shown.bs.tab', function () {
+            loadAllTripsAdmin();
+        });
+    }
 }
 
 // ========== Authentication handlers ==========
@@ -95,10 +112,12 @@ async function handleLogin(e) {
             const data = await response.json();
             localStorage.setItem('token', data.token);
             localStorage.setItem('userName', `${data.firstName} ${data.lastName}`);
+            localStorage.setItem('userRoles', JSON.stringify(data.roles || []));
 
             currentUser = {
                 token: data.token,
-                name: `${data.firstName} ${data.lastName}`
+                name: `${data.firstName} ${data.lastName}`,
+                roles: data.roles || []
             };
 
             bootstrap.Modal.getInstance(document.getElementById('loginModal')).hide();
@@ -137,10 +156,12 @@ async function handleRegister(e) {
             const data = await response.json();
             localStorage.setItem('token', data.token);
             localStorage.setItem('userName', `${data.firstName} ${data.lastName}`);
+            localStorage.setItem('userRoles', JSON.stringify(data.roles || []));
 
             currentUser = {
                 token: data.token,
-                name: `${data.firstName} ${data.lastName}`
+                name: `${data.firstName} ${data.lastName}`,
+                roles: data.roles || []
             };
 
             bootstrap.Modal.getInstance(document.getElementById('registerModal')).hide();
@@ -161,6 +182,7 @@ async function handleRegister(e) {
 function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('userName');
+    localStorage.removeItem('userRoles');
     currentUser = null;
     currentTrip = null;
     showAuthButtons();
@@ -170,6 +192,7 @@ function logout() {
     document.getElementById('tripDetailsCard').style.display = 'none';
     document.getElementById('waypointsCard').style.display = 'none';
     document.getElementById('poiSearchPanel').style.display = 'none';
+    document.getElementById('adminPanel').style.display = 'none';
 }
 
 // ========== Trip handlers ==========
@@ -1012,5 +1035,199 @@ function showError(message) {
 
 function showInfo(message) {
     alert(message);
+}
+
+// ========== Admin Panel Functions ==========
+
+function showAdminPanel() {
+    // Hide other panels
+    document.getElementById('tripDetailsCard').style.display = 'none';
+    document.getElementById('waypointsCard').style.display = 'none';
+    document.getElementById('poiSearchPanel').style.display = 'none';
+
+    // Show admin panel
+    document.getElementById('adminPanel').style.display = 'block';
+
+    // Load users
+    loadAllUsers();
+}
+
+async function loadAllUsers() {
+    if (!currentUser || !currentUser.roles.includes('Admin')) return;
+
+    try {
+        const response = await fetch(`${API_URL}/admin/users`, {
+            headers: {
+                'Authorization': `Bearer ${currentUser.token}`
+            }
+        });
+
+        if (response.ok) {
+            const users = await response.json();
+            displayUsers(users);
+        } else {
+            showError('Nem sikerült betölteni a felhasználókat');
+        }
+    } catch (error) {
+        showError('Hálózati hiba történt');
+        console.error(error);
+    }
+}
+
+function displayUsers(users) {
+    const usersList = document.getElementById('usersList');
+
+    if (users.length === 0) {
+        usersList.innerHTML = '<tr><td colspan="4" class="text-center">Nincs megjeleníthető felhasználó</td></tr>';
+        return;
+    }
+
+    usersList.innerHTML = users.map(user => `
+        <tr>
+            <td>${user.email}</td>
+            <td>${user.firstName} ${user.lastName}</td>
+            <td>
+                ${user.roles.map(role => `<span class="badge bg-primary">${role}</span>`).join(' ') || '<span class="badge bg-secondary">User</span>'}
+            </td>
+            <td>
+                <button class="btn btn-sm btn-warning me-2" onclick="changeUserRole('${user.id}', '${user.email}')">
+                    <i class="bi bi-pencil"></i> Szerepkör
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteUser('${user.id}', '${user.email}')">
+                    <i class="bi bi-trash"></i> Törlés
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function changeUserRole(userId, userEmail) {
+    const role = prompt(`Válassz szerepkört a ${userEmail} felhasználónak:\n\nAdmin - Adminisztrátor\nUser - Sima felhasználó\n\nÍrd be a szerepkört (Admin vagy User):`);
+
+    if (!role) return;
+
+    if (role !== 'Admin' && role !== 'User') {
+        showError('Érvénytelen szerepkör! Csak "Admin" vagy "User" lehet.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/admin/users/${userId}/role`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentUser.token}`
+            },
+            body: JSON.stringify({ role })
+        });
+
+        if (response.ok) {
+            showSuccess('Szerepkör sikeresen frissítve!');
+            loadAllUsers();
+        } else {
+            const error = await response.json();
+            showError(error.message || 'Nem sikerült frissíteni a szerepkört');
+        }
+    } catch (error) {
+        showError('Hálózati hiba történt');
+        console.error(error);
+    }
+}
+
+async function deleteUser(userId, userEmail) {
+    if (!confirm(`Biztosan törölni szeretnéd a következő felhasználót?\n\n${userEmail}`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${currentUser.token}`
+            }
+        });
+
+        if (response.ok) {
+            showSuccess('Felhasználó sikeresen törölve!');
+            loadAllUsers();
+        } else {
+            const error = await response.json();
+            showError(error.message || 'Nem sikerült törölni a felhasználót');
+        }
+    } catch (error) {
+        showError('Hálózati hiba történt');
+        console.error(error);
+    }
+}
+
+async function loadAllTripsAdmin() {
+    if (!currentUser || !currentUser.roles.includes('Admin')) return;
+
+    try {
+        const response = await fetch(`${API_URL}/admin/trips`, {
+            headers: {
+                'Authorization': `Bearer ${currentUser.token}`
+            }
+        });
+
+        if (response.ok) {
+            const trips = await response.json();
+            displayTripsAdmin(trips);
+        } else {
+            showError('Nem sikerült betölteni az utazásokat');
+        }
+    } catch (error) {
+        showError('Hálózati hiba történt');
+        console.error(error);
+    }
+}
+
+function displayTripsAdmin(trips) {
+    const tripsList = document.getElementById('adminTripsList');
+
+    if (trips.length === 0) {
+        tripsList.innerHTML = '<tr><td colspan="5" class="text-center">Nincs megjeleníthető utazás</td></tr>';
+        return;
+    }
+
+    tripsList.innerHTML = trips.map(trip => `
+        <tr>
+            <td>${trip.title}</td>
+            <td>${trip.createdBy}<br><small class="text-muted">${trip.createdByEmail}</small></td>
+            <td>${new Date(trip.startDate).toLocaleDateString('hu-HU')} - ${new Date(trip.endDate).toLocaleDateString('hu-HU')}</td>
+            <td><span class="badge bg-${getTripStatusColor(trip.status)}">${getTripStatusText(trip.status)}</span></td>
+            <td>
+                <button class="btn btn-sm btn-danger" onclick="deleteTripAdmin(${trip.id}, '${trip.title}')">
+                    <i class="bi bi-trash"></i> Törlés
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function deleteTripAdmin(tripId, tripTitle) {
+    if (!confirm(`Biztosan törölni szeretnéd a következő utazást?\n\n"${tripTitle}"`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/admin/trips/${tripId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${currentUser.token}`
+            }
+        });
+
+        if (response.ok) {
+            showSuccess('Utazás sikeresen törölve!');
+            loadAllTripsAdmin();
+        } else {
+            const error = await response.json();
+            showError(error.message || 'Nem sikerült törölni az utazást');
+        }
+    } catch (error) {
+        showError('Hálózati hiba történt');
+        console.error(error);
+    }
 }
 
