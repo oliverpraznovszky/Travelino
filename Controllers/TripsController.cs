@@ -94,7 +94,6 @@ public class TripsController : ControllerBase
             StartDate = dto.StartDate,
             EndDate = dto.EndDate,
             IsPublic = dto.IsPublic,
-            TravelMode = dto.TravelMode,
             CreatedByUserId = userId,
             CreatedAt = DateTime.UtcNow,
             Status = TripStatus.Planning
@@ -153,7 +152,6 @@ public class TripsController : ControllerBase
         if (dto.EndDate.HasValue) trip.EndDate = dto.EndDate.Value;
         if (dto.Status.HasValue) trip.Status = dto.Status.Value;
         if (dto.IsPublic.HasValue) trip.IsPublic = dto.IsPublic.Value;
-        if (dto.TravelMode.HasValue) trip.TravelMode = dto.TravelMode.Value;
 
         trip.UpdatedAt = DateTime.UtcNow;
 
@@ -359,7 +357,6 @@ public class TripsController : ControllerBase
             UpdatedAt = trip.UpdatedAt,
             Status = trip.Status,
             IsPublic = trip.IsPublic,
-            TravelMode = trip.TravelMode,
             CreatedByUserName = $"{trip.CreatedBy.FirstName} {trip.CreatedBy.LastName}",
             ComparisonNotes = trip.ComparisonNotes,
             Participants = trip.Participants.Select(p => new TripParticipantDto

@@ -88,6 +88,7 @@ public class InvitationsController : ControllerBase
 
         var trip = await _context.Trips
             .Include(t => t.Participants)
+                .ThenInclude(p => p.User)
             .FirstOrDefaultAsync(t => t.Id == tripId);
 
         if (trip == null)
@@ -104,7 +105,7 @@ public class InvitationsController : ControllerBase
         }
 
         // Check if user is already a participant
-        var isAlreadyParticipant = trip.Participants.Any(p => p.User.Email == dto.InvitedEmail);
+        var isAlreadyParticipant = trip.Participants.Any(p => p.User != null && p.User.Email == dto.InvitedEmail);
         if (isAlreadyParticipant)
         {
             return BadRequest(new { message = "Ez a felhasználó már résztvevője az útnak." });

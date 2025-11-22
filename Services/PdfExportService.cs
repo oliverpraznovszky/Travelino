@@ -63,12 +63,6 @@ public class PdfExportService
                             text.Span(trip.Status.ToString());
                         });
 
-                        column.Item().Text(text =>
-                        {
-                            text.Span("Utazási mód: ").SemiBold();
-                            text.Span(trip.TravelMode == TravelMode.Walking ? "Gyalog" : "Autóval");
-                        });
-
                         // Map visualization
                         if (trip.Waypoints.Any())
                         {
@@ -195,32 +189,43 @@ public class PdfExportService
             var centerLon = (minLon + maxLon) / 2;
 
             // Calculate appropriate zoom level based on bounding box
-            var zoom = CalculateZoomLevel(minLat, maxLat, minLon, maxLon, 800, 600);
+            var zoom = CalculateZoomLevel(minLat, maxLat, minLon, maxLon, 640, 480);
 
-            // Build marker string for waypoints
-            var markers = new StringBuilder();
-            for (int i = 0; i < waypoints.Count; i++)
-            {
-                var waypoint = waypoints[i];
-                // Add marker with number label
-                markers.Append($"&markers={waypoint.Latitude},{waypoint.Longitude},red-{i + 1}");
-            }
+            // Construct static map URL using Mapbox Static API (free tier)
+            // Format: https://api.mapbox.com/styles/v1/{username}/{style_id}/static/[{overlay},]{lon},{lat},{zoom},{bearing},{pitch}|{bbox}|{auto}/{width}x{height}{@2x}
+            // Using bounding box approach
+            var mapUrl = $"https://api.mapbox.com/styles/v1/mapbox/streets-v12/static/" +
+                         $"[{string.Join(",", waypoints.Select(w => $"pin-s+ff0000({w.Longitude},{w.Latitude})"))}]/" +
+                         $"[{minLon},{minLat},{maxLon},{maxLat}]/" +
+                         $"640x480?" +
+                         $"access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw";
 
-            // Construct static map URL using StaticMap service
-            // Using geoapify.com free tier (no API key needed for basic usage)
-            // Alternative: use staticmap.openstreetmap.de
-            var mapUrl = $"https://staticmap.openstreetmap.de/staticmap.php?" +
-                         $"center={centerLat},{centerLon}" +
-                         $"&zoom={zoom}" +
-                         $"&size=800x600" +
-                         $"&maptype=mapnik" +
-                         BuildMarkers(waypoints);
+            // Fallback to simpler OpenStreetMap static map if Mapbox fails
+            var fallbackUrl = $"https://staticmap.openstreetmap.de/staticmap.php?" +
+                            $"center={centerLat},{centerLon}" +
+                            $"&zoom={zoom}" +
+                            $"&size=640x480" +
+                            $"&maptype=mapnik";
 
             // Download the image
             var httpClient = _httpClientFactory.CreateClient();
-            httpClient.Timeout = TimeSpan.FromSeconds(10);
+            httpClient.Timeout = TimeSpan.FromSeconds(15);
+            httpClient.DefaultRequestHeaders.Add("User-Agent", "Travelino/1.0");
 
+            // Try Mapbox first
             var response = httpClient.GetAsync(mapUrl).GetAwaiter().GetResult();
+
+            if (response.IsSuccessStatusCode)
+            {
+                var imageData = response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+                if (imageData != null && imageData.Length > 0)
+                {
+                    return imageData;
+                }
+            }
+
+            // Try fallback URL
+            response = httpClient.GetAsync(fallbackUrl).GetAwaiter().GetResult();
 
             if (response.IsSuccessStatusCode)
             {
@@ -233,20 +238,6 @@ public class PdfExportService
         {
             return null;
         }
-    }
-
-    private string BuildMarkers(List<Waypoint> waypoints)
-    {
-        var markers = new StringBuilder();
-
-        for (int i = 0; i < waypoints.Count; i++)
-        {
-            var waypoint = waypoints[i];
-            // Format: &markers=lat,lon,color
-            markers.Append($"&markers={waypoint.Latitude},{waypoint.Longitude},lightblue{i + 1}");
-        }
-
-        return markers.ToString();
     }
 
     private int CalculateZoomLevel(double minLat, double maxLat, double minLon, double maxLon, int mapWidth, int mapHeight)

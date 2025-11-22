@@ -69,6 +69,7 @@ function setupEventListeners() {
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
     document.getElementById('registerForm').addEventListener('submit', handleRegister);
     document.getElementById('createTripForm').addEventListener('submit', handleCreateTrip);
+    document.getElementById('editTripForm').addEventListener('submit', handleEditTrip);
     document.getElementById('addWaypointForm').addEventListener('submit', handleAddWaypoint);
     document.getElementById('inviteForm').addEventListener('submit', handleInvite);
 }
@@ -204,14 +205,21 @@ function displayTrips(trips) {
     }
 
     tripsList.innerHTML = trips.map(trip => `
-        <a href="#" class="list-group-item list-group-item-action" onclick="selectTrip(${trip.id}, event); return false;">
-            <div class="d-flex w-100 justify-content-between">
-                <h6 class="mb-1">${trip.title}</h6>
-                <small>${new Date(trip.startDate).toLocaleDateString('hu-HU')}</small>
+        <div class="list-group-item list-group-item-action" onclick="selectTrip(${trip.id}, event);" style="cursor: pointer;">
+            <div class="d-flex w-100 justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <h6 class="mb-1">${trip.title}</h6>
+                    <p class="mb-1 text-truncate">${trip.description || ''}</p>
+                    <small>Státusz: ${getTripStatusText(trip.status)}</small>
+                </div>
+                <div class="d-flex flex-column gap-1" style="min-width: 80px;">
+                    <small class="text-muted">${new Date(trip.startDate).toLocaleDateString('hu-HU')}</small>
+                    <button class="btn btn-sm btn-outline-primary" onclick="openEditTripModal(${trip.id}, event);" title="Szerkesztés">
+                        <i class="bi bi-pencil"></i> Szerkeszt
+                    </button>
+                </div>
             </div>
-            <p class="mb-1 text-truncate">${trip.description || ''}</p>
-            <small>Státusz: ${getTripStatusText(trip.status)}</small>
-        </a>
+        </div>
     `).join('');
 }
 
@@ -223,7 +231,6 @@ async function handleCreateTrip(e) {
     const startDate = document.getElementById('tripStartDate').value;
     const endDate = document.getElementById('tripEndDate').value;
     const isPublic = document.getElementById('tripIsPublic').checked;
-    const travelMode = parseInt(document.getElementById('tripTravelMode').value);
 
     try {
         const response = await fetch(`${API_URL}/trips`, {
@@ -232,7 +239,7 @@ async function handleCreateTrip(e) {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${currentUser.token}`
             },
-            body: JSON.stringify({ title, description, startDate, endDate, isPublic, travelMode })
+            body: JSON.stringify({ title, description, startDate, endDate, isPublic })
         });
 
         if (response.ok) {
@@ -244,6 +251,88 @@ async function handleCreateTrip(e) {
             showSuccess('Utazás sikeresen létrehozva!');
         } else {
             showError('Nem sikerült létrehozni az utazást');
+        }
+    } catch (error) {
+        showError('Hálózati hiba történt');
+        console.error(error);
+    }
+}
+
+function openEditTripModal(tripId, event) {
+    event.stopPropagation();
+
+    if (!currentTrip || currentTrip.id !== tripId) {
+        // Load trip first
+        selectTrip(tripId).then(() => {
+            showEditModal();
+        });
+    } else {
+        showEditModal();
+    }
+
+    function showEditModal() {
+        document.getElementById('editTripId').value = currentTrip.id;
+        document.getElementById('editTripTitle').value = currentTrip.title;
+        document.getElementById('editTripStatus').value = currentTrip.status;
+
+        const modal = new bootstrap.Modal(document.getElementById('editTripModal'));
+        modal.show();
+    }
+}
+
+async function handleEditTrip(e) {
+    e.preventDefault();
+
+    const tripId = document.getElementById('editTripId').value;
+    const status = parseInt(document.getElementById('editTripStatus').value);
+
+    try {
+        const response = await fetch(`${API_URL}/trips/${tripId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentUser.token}`
+            },
+            body: JSON.stringify({ status })
+        });
+
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('editTripModal')).hide();
+            loadTrips();
+            selectTrip(tripId);
+            showSuccess('Utazás sikeresen frissítve!');
+        } else {
+            showError('Nem sikerült frissíteni az utazást');
+        }
+    } catch (error) {
+        showError('Hálózati hiba történt');
+        console.error(error);
+    }
+}
+
+async function handleDeleteTrip() {
+    const tripId = document.getElementById('editTripId').value;
+
+    if (!confirm('Biztosan törölni szeretnéd ezt az utazást?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/trips/${tripId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${currentUser.token}`
+            }
+        });
+
+        if (response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('editTripModal')).hide();
+            currentTrip = null;
+            document.getElementById('tripDetailsCard').style.display = 'none';
+            loadTrips();
+            showSuccess('Utazás sikeresen törölve!');
+        } else {
+            showError('Nem sikerült törölni az utazást');
         }
     } catch (error) {
         showError('Hálózati hiba történt');
@@ -295,15 +384,11 @@ function displayTripDetails(trip) {
     const detailsCard = document.getElementById('tripDetailsCard');
     const details = document.getElementById('tripDetails');
 
-    const travelModeText = trip.travelMode === 0 ? '🚶 Gyalog' : '🚗 Autóval';
-    const travelModeColor = trip.travelMode === 0 ? 'success' : 'primary';
-
     details.innerHTML = `
         <h5>${trip.title}</h5>
         <p>${trip.description || 'Nincs leírás'}</p>
         <p><strong>Időpont:</strong> ${new Date(trip.startDate).toLocaleDateString('hu-HU')} - ${new Date(trip.endDate).toLocaleDateString('hu-HU')}</p>
         <p><strong>Státusz:</strong> <span class="badge bg-${getTripStatusColor(trip.status)}">${getTripStatusText(trip.status)}</span></p>
-        <p><strong>Utazási mód:</strong> <span class="badge bg-${travelModeColor}">${travelModeText}</span></p>
         <p><strong>Résztvevők:</strong> ${trip.participants.length}</p>
         ${trip.comparisonNotes ? `
             <div class="alert alert-info">
@@ -447,10 +532,6 @@ function updateRouting(waypoints) {
         return;
     }
 
-    // Determine routing profile based on travel mode
-    // TravelMode: 0 = Walking, 1 = Driving
-    const profile = currentTrip.travelMode === 0 ? 'foot' : 'car';
-
     // Create waypoints for routing (max 25 waypoints for OSRM)
     const routeWaypoints = waypoints
         .slice(0, 25)
@@ -464,12 +545,12 @@ function updateRouting(waypoints) {
         fitSelectedRoutes: false,
         showAlternatives: false,
         lineOptions: {
-            styles: [{color: currentTrip.travelMode === 0 ? '#28a745' : '#0d6efd', opacity: 0.8, weight: 5}]
+            styles: [{color: '#0d6efd', opacity: 0.8, weight: 5}]
         },
         createMarker: function() { return null; }, // Don't create default markers
         router: L.Routing.osrmv1({
             serviceUrl: `https://router.project-osrm.org/route/v1`,
-            profile: profile
+            profile: 'car'
         })
     }).addTo(map);
 
@@ -477,9 +558,7 @@ function updateRouting(waypoints) {
         const routes = e.routes;
         const summary = routes[0].summary;
 
-        const travelModeText = currentTrip.travelMode === 0 ? 'Gyalog' : 'Autóval';
         console.log('Route found:', {
-            mode: travelModeText,
             distance: (summary.totalDistance / 1000).toFixed(2) + ' km',
             duration: Math.round(summary.totalTime / 60) + ' perc'
         });
@@ -883,10 +962,8 @@ async function compareTrip() {
 function getTripStatusText(status) {
     const statuses = {
         0: 'Tervezés',
-        1: 'Jóváhagyott',
-        2: 'Folyamatban',
-        3: 'Befejezett',
-        4: 'Törölt'
+        1: 'Szervezés',
+        2: 'Kész'
     };
     return statuses[status] || 'Ismeretlen';
 }
@@ -895,9 +972,7 @@ function getTripStatusColor(status) {
     const colors = {
         0: 'secondary',
         1: 'info',
-        2: 'primary',
-        3: 'success',
-        4: 'danger'
+        2: 'success'
     };
     return colors[status] || 'secondary';
 }
