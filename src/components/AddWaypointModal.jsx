@@ -31,7 +31,11 @@ function AddWaypointModal({ trip, onWaypointAdded, prefilledData }) {
       });
 
       // Show the modal when prefilled data is provided
-      const modal = new window.bootstrap.Modal(modalEl);
+      // Check if modal instance already exists
+      let modal = window.bootstrap.Modal.getInstance(modalEl);
+      if (!modal) {
+        modal = new window.bootstrap.Modal(modalEl);
+      }
       modal.show();
 
       // Clear prefilled data when modal is closed

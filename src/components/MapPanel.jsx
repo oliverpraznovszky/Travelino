@@ -125,6 +125,7 @@ function MapPanel({ trip, onTripUpdate, onWaypointModalOpen, onDeleteWaypoint })
           draggableWaypoints: false,
           fitSelectedRoutes: false,
           showAlternatives: false,
+          show: false, // Hide directions panel
           lineOptions: {
             styles: [{ color: '#0d6efd', opacity: 0.8, weight: 5 }],
           },

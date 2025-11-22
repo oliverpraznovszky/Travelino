@@ -5,6 +5,7 @@ import TripDetails from '../components/TripDetails';
 import CreateTripModal from '../components/CreateTripModal';
 import EditTripModal from '../components/EditTripModal';
 import InvitationsModal from '../components/InvitationsModal';
+import InviteModal from '../components/InviteModal';
 import AddWaypointModal from '../components/AddWaypointModal';
 import api from '../services/api';
 
@@ -127,7 +128,10 @@ function MainPage() {
       {/* Modals */}
       <CreateTripModal onTripCreated={handleTripCreated} />
       {selectedTrip && (
-        <EditTripModal trip={selectedTrip} onTripUpdated={handleTripUpdated} />
+        <>
+          <EditTripModal trip={selectedTrip} onTripUpdated={handleTripUpdated} />
+          <InviteModal trip={selectedTrip} onInviteSent={handleTripUpdated} />
+        </>
       )}
       <InvitationsModal />
       {selectedTrip && waypointModalData && (
