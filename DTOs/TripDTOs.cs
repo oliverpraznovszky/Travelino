@@ -19,6 +19,8 @@ public class CreateTripDto
     public DateTime EndDate { get; set; }
 
     public bool IsPublic { get; set; } = false;
+
+    public TravelMode TravelMode { get; set; } = TravelMode.Driving;
 }
 
 public class UpdateTripDto
@@ -33,6 +35,7 @@ public class UpdateTripDto
     public DateTime? EndDate { get; set; }
     public TripStatus? Status { get; set; }
     public bool? IsPublic { get; set; }
+    public TravelMode? TravelMode { get; set; }
 }
 
 public class TripDto
@@ -46,6 +49,7 @@ public class TripDto
     public DateTime? UpdatedAt { get; set; }
     public TripStatus Status { get; set; }
     public bool IsPublic { get; set; }
+    public TravelMode TravelMode { get; set; }
     public string CreatedByUserName { get; set; } = string.Empty;
     public List<TripParticipantDto> Participants { get; set; } = new();
     public List<WaypointDto> Waypoints { get; set; } = new();
