@@ -17,7 +17,10 @@ function MapPanel({ trip, onTripUpdate }) {
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
   const routingControlRef = useRef(null);
+  const poiMarkersRef = useRef([]);
   const [showPOI, setShowPOI] = useState(false);
+  const [poiType, setPoiType] = useState('restaurant');
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     // Initialize map
@@ -98,6 +101,80 @@ function MapPanel({ trip, onTripUpdate }) {
     }
   }, [trip]);
 
+  const searchPOI = async () => {
+    if (!mapInstanceRef.current || !trip) return;
+
+    setSearching(true);
+    clearPOIMarkers();
+
+    try {
+      const bounds = mapInstanceRef.current.getBounds();
+      const south = bounds.getSouth();
+      const west = bounds.getWest();
+      const north = bounds.getNorth();
+      const east = bounds.getEast();
+
+      // Overpass API query
+      const query = `
+        [out:json][timeout:25];
+        (
+          node["amenity"="${poiType}"](${south},${west},${north},${east});
+          way["amenity"="${poiType}"](${south},${west},${north},${east});
+          relation["amenity"="${poiType}"](${south},${west},${north},${east});
+        );
+        out center;
+      `;
+
+      const response = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: query,
+      });
+
+      const data = await response.json();
+
+      // Add POI markers
+      data.elements.forEach((element) => {
+        const lat = element.lat || element.center?.lat;
+        const lon = element.lon || element.center?.lon;
+
+        if (lat && lon) {
+          const poiIcon = L.icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41],
+          });
+
+          const marker = L.marker([lat, lon], { icon: poiIcon })
+            .addTo(mapInstanceRef.current)
+            .bindPopup(`
+              <strong>${element.tags?.name || 'Névtelen POI'}</strong><br/>
+              ${element.tags?.cuisine ? `Konyha: ${element.tags.cuisine}<br/>` : ''}
+              ${element.tags?.addr?.street ? `Cím: ${element.tags.addr.street}<br/>` : ''}
+            `);
+
+          poiMarkersRef.current.push(marker);
+        }
+      });
+
+      if (data.elements.length === 0) {
+        alert('Nem található POI a térképen látható területen');
+      }
+    } catch (error) {
+      console.error('POI search error:', error);
+      alert('Hiba történt a POI keresés során');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const clearPOIMarkers = () => {
+    poiMarkersRef.current.forEach((marker) => marker.remove());
+    poiMarkersRef.current = [];
+  };
+
   return (
     <div style={{ position: 'relative', height: '100%', width: '100%' }}>
       <div ref={mapRef} style={{ height: '100%', width: '100%' }}></div>
@@ -111,17 +188,37 @@ function MapPanel({ trip, onTripUpdate }) {
               type="button"
               className="btn-close"
               aria-label="Close"
-              onClick={() => setShowPOI(false)}
+              onClick={() => {
+                setShowPOI(false);
+                clearPOIMarkers();
+              }}
             ></button>
           </div>
           <div className="mb-2">
-            <select className="form-select form-select-sm">
+            <select
+              className="form-select form-select-sm"
+              value={poiType}
+              onChange={(e) => setPoiType(e.target.value)}
+            >
               <option value="restaurant">Étterem</option>
-              <option value="tourism">Látnivaló</option>
-              <option value="hotel">Szállás</option>
+              <option value="cafe">Kávézó</option>
+              <option value="bar">Bár</option>
+              <option value="fast_food">Gyorsétterem</option>
             </select>
           </div>
-          <button className="btn btn-primary btn-sm w-100">Keresés</button>
+          <button
+            className="btn btn-primary btn-sm w-100 mb-2"
+            onClick={searchPOI}
+            disabled={searching}
+          >
+            {searching ? 'Keresés...' : 'Keresés'}
+          </button>
+          <button
+            className="btn btn-secondary btn-sm w-100"
+            onClick={clearPOIMarkers}
+          >
+            Törlés
+          </button>
         </div>
       )}
 
