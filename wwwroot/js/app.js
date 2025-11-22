@@ -204,7 +204,7 @@ function displayTrips(trips) {
     }
 
     tripsList.innerHTML = trips.map(trip => `
-        <a href="#" class="list-group-item list-group-item-action" onclick="selectTrip(${trip.id}); return false;">
+        <a href="#" class="list-group-item list-group-item-action" onclick="selectTrip(${trip.id}, event); return false;">
             <div class="d-flex w-100 justify-content-between">
                 <h6 class="mb-1">${trip.title}</h6>
                 <small>${new Date(trip.startDate).toLocaleDateString('hu-HU')}</small>
@@ -250,7 +250,7 @@ async function handleCreateTrip(e) {
     }
 }
 
-async function selectTrip(tripId) {
+async function selectTrip(tripId, event = null) {
     if (!currentUser) return;
 
     try {
@@ -273,7 +273,14 @@ async function selectTrip(tripId) {
             document.querySelectorAll('#tripsList .list-group-item').forEach(item => {
                 item.classList.remove('active');
             });
-            event.target.closest('.list-group-item')?.classList.add('active');
+
+            // Only try to highlight if we have an event
+            if (event && event.target) {
+                const clickedItem = event.target.closest('.list-group-item');
+                if (clickedItem) {
+                    clickedItem.classList.add('active');
+                }
+            }
         } else {
             showError('Nem sikerült betölteni az utazást');
         }
